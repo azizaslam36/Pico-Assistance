@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Assistant - Aly</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <button id="mic-button"></button>
+        <h1>Voice Assistant - pico</h1>
+        <p id="response">Click the button and speak a command!</p>
+        <button id="action-button" onclick="handleButtonClick()">Start Listening</button><br><br>
+        <canvas id="waveformCanvas"></canvas>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="/static/script.js"></script>
+</body>
+</html>
