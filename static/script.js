@@ -1,89 +1,93 @@
 let isListening = false;
 let voices = [];
-let isSpeaking = false;  // Prevent conflicts between speaking & listening
+let isSpeaking = false;
+let speakingAnimation = false;
 
-// Get elements
+
 const micButton = document.getElementById("mic-button");
 const actionButton = document.getElementById("action-button");
-const responseText = document.getElementById("response");
+const chatWindow = document.getElementById("chat-window");
 const canvas = document.getElementById("waveformCanvas");
 const ctx = canvas.getContext("2d");
 
-// Initialize Speech Recognition API
+// Speech Recognition setup
 const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
 recognition.continuous = false;
 recognition.interimResults = false;
 recognition.lang = "en-US";
 
-// Check for browser support
-if (!SpeechRecognition) {
-    alert("Speech Recognition is not supported in this browser. Please use Chrome.");
-}
-
-// ✅ Load voices properly and retry if empty
+// Load voices
 function loadVoices() {
     voices = window.speechSynthesis.getVoices();
-    if (voices.length === 0) {
-        setTimeout(loadVoices, 500);  // Retry if voices are not available yet
-    }
+    if (voices.length === 0) setTimeout(loadVoices, 500);
 }
 window.speechSynthesis.onvoiceschanged = loadVoices;
-loadVoices(); // Initial load
+loadVoices();
 
-// ✅ Function to make Pico speak
+// Speak function
 function speak(text, callback = null) {
-    if (voices.length === 0) {
-        setTimeout(() => speak(text, callback), 500);
-        return;
-    }
+    if (voices.length === 0) { setTimeout(() => speak(text, callback), 500); return; }
 
     let speech = new SpeechSynthesisUtterance(text);
-    let femaleVoice = voices.find(voice => voice.name.toLowerCase().includes("female")) || voices[0];
-
+    let femaleVoice = voices.find(v => v.name.toLowerCase().includes("female")) || voices[0];
     speech.voice = femaleVoice;
+
     isSpeaking = true;
+    speakingAnimation = true;  // Start speaking waveform animation
 
     speech.onend = () => {
         isSpeaking = false;
+        speakingAnimation = false; // Stop animation when done
         if (callback) callback();
     };
 
     window.speechSynthesis.speak(speech);
 }
 
-// ✅ Start listening after Pico finishes speaking
+
+// Chat message function
+function addMessage(text, sender, imageUrl = null) {
+    const message = document.createElement("div");
+    message.classList.add("message", sender);
+    const bubble = document.createElement("div");
+    bubble.classList.add("bubble");
+    bubble.innerText = text;
+    message.appendChild(bubble);
+    if (imageUrl) {
+        const img = document.createElement("img");
+        img.src = imageUrl;
+        message.appendChild(img);
+    }
+    chatWindow.appendChild(message);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+// Start listening
 function startListening() {
     actionButton.disabled = true;
-    responseText.innerText = "Hi, pico Here. How can I help you?";
-
-    speak("Hi, pico Here. How can I help you?", () => {
-        responseText.innerText = "Listening...";
+    addMessage("Hi, Pico here. How can I help you?", "pico");
+    speak("Hi, Pico here. How can I help you?", () => {
         recognition.start();
         isListening = true;
         actionButton.innerText = "Stop Listening";
         actionButton.disabled = false;
-        micButton.classList.add("active"); // Mic animation starts
+        micButton.classList.add("active");
     });
 }
 
-// ✅ Handle Start/Stop Listening Button
+// Action button click
 actionButton.addEventListener("click", () => {
     window.speechSynthesis.resume();
-
-    if (isSpeaking) return; // Prevent listening while speaking
-
+    if (isSpeaking) return;
     if (isListening) {
         recognition.stop();
-        responseText.innerText = "Stopped Listening.";
-        actionButton.innerText = "Start Listening";
         isListening = false;
-        micButton.classList.remove("active"); // Mic animation stops
-    } else {
-        startListening();
-    }
+        actionButton.innerText = "Start Listening";
+        micButton.classList.remove("active");
+    } else startListening();
 });
 
-// ✅ Handle microphone button (direct listening)
+// Mic button click
 micButton.addEventListener("click", () => {
     if (micButton.classList.contains("active")) {
         recognition.stop();
@@ -94,178 +98,100 @@ micButton.addEventListener("click", () => {
     }
 });
 
-// ✅ Handle Voice Input
+// Handle voice input
 recognition.onresult = (event) => {
-    const command = event.results[0][0].transcript.toLowerCase();
-    responseText.innerText = `You said: ${command}`;
+    const command = event.results[0][0].transcript;
+    addMessage(command, "user");
     sendCommand(command);
 };
 
-// ✅ Stop mic animation when listening stops
-recognition.onend = () => {
-    isListening = false;
-    micButton.classList.remove("active");
-};
+recognition.onend = () => { isListening = false; micButton.classList.remove("active"); };
 
-// ✅ Send command to Flask
+// Send command to Flask
 function sendCommand(command) {
     fetch("/command", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: command })
     })
-    .then(response => response.json())
-    .then(data => {
-        responseText.innerText = data.response;
-
-        // Check if Pico should exit
-        const lowerResp = data.response.toLowerCase();
-        if (lowerResp.includes("bye") || lowerResp.includes("exit")) {
-            speak(data.response, () => {
-                shutdownAssistant();  // Call shutdown function
-            });
-        } else {
-            speak(data.response, () => {
-                recognition.start();          // Restart listening
-                responseText.innerText = "Listening...";
-                isListening = true;
-                actionButton.innerText = "Stop Listening";
-                micButton.classList.add("active");
-            });
-
-            if (data.redirect) {
-                window.open(data.redirect, "_blank");
-            }
-        }
-    })
-    .catch(error => {
-        console.error("Error:", error);
-        responseText.innerText = "Sorry, something went wrong.";
-        speak("Sorry, something went wrong.");
-    });
-}
-
-
-// Resize canvas to fit
-canvas.width = window.innerWidth;
-canvas.height = 100;
-
-// Get user microphone input
-navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-    const audioContext = new AudioContext();
-    const analyser = audioContext.createAnalyser();
-    const source = audioContext.createMediaStreamSource(stream);
-    
-    source.connect(analyser);
-    analyser.fftSize = 256;
-    
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
-
-    function drawWaveform() {
-        requestAnimationFrame(drawWaveform);
-        analyser.getByteTimeDomainData(dataArray);
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.beginPath();
-        ctx.strokeStyle = "lime";
-        ctx.lineWidth = 2;
-
-        let sliceWidth = canvas.width / bufferLength;
-        let x = 0;
-
-        for (let i = 0; i < bufferLength; i++) {
-            let v = dataArray[i] / 128.0;
-            let y = v * canvas.height / 2;
-
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
-            x += sliceWidth;
-        }
-
-        ctx.stroke();
-    }
-
-    drawWaveform();
-});
-
-function shutdownAssistant() {
-    isListening = false;
-    recognition.stop();
-    micButton.classList.remove("active");
-    actionButton.disabled = true;
-    micButton.disabled = true;
-
-    responseText.innerText = "Pico is now offline. Have a great day!";
-
-    // Optional: Show a full-screen goodbye overlay
-    const goodbyeDiv = document.createElement("div");
-    goodbyeDiv.innerText = "👋 Pico is now offline. Bye!";
-    goodbyeDiv.style.cssText = `
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: #111;
-    color: white;
-    font-size: 2rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;`;
-    document.body.appendChild(goodbyeDiv);
-}
-
-const outputDiv = document.getElementById("output");
-
-function handleResponse(data) {
-    outputDiv.innerHTML = `<p>${data.text}</p>`;
-
-    if (data.image) {
-        const img = document.createElement("img");
-        img.src = data.image;
-        img.alt = "Wikipedia image";
-        img.style.maxWidth = "300px";
-        img.style.marginTop = "10px";
-        outputDiv.appendChild(img);
-    }
-
-    speak(data.text);
-}
-
-function sendQuery(query) {
-    fetch('http://127.0.0.1:5000/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-    })
     .then(res => res.json())
-    .then(data => handleResponse(data))
+    .then(data => {
+        addMessage(data.response, "pico", data.image);
+        speak(data.response, () => {
+            recognition.start();
+            isListening = true;
+            actionButton.innerText = "Stop Listening";
+            micButton.classList.add("active");
+        });
+    })
     .catch(err => {
-        outputDiv.innerHTML = "<p>Sorry, something went wrong.</p>";
+        addMessage("Sorry, something went wrong.", "pico");
+        speak("Sorry, something went wrong.");
         console.error(err);
     });
 }
 
-document.getElementById("micBtn").addEventListener("click", () => {
-    recognition.lang = "en-IN";
-    recognition.start();
+// Canvas waveform
+canvas.width = canvas.offsetWidth;
+canvas.height = canvas.offsetHeight;
 
-    recognition.onresult = function(event) {
-        const transcript = event.results[0][0].transcript;
-        sendQuery(transcript);
-    };
+navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    const audioCtx = new AudioContext();
+    const analyser = audioCtx.createAnalyser();
+    const source = audioCtx.createMediaStreamSource(stream);
+    source.connect(analyser);
+    analyser.fftSize = 256;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
 
-    recognition.onerror = function(event) {
-        outputDiv.innerHTML = "<p>Speech recognition error</p>";
-    };
-});
+    function drawWaveform() {
+    requestAnimationFrame(drawWaveform);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-document.getElementById("queryForm").addEventListener("submit", function(event) {
-    event.preventDefault();
-    const query = document.getElementById("queryInput").value;
-    if (query.trim()) {
-        sendQuery(query);
+    // Speaking Animation (smooth glowing wave)
+    if (speakingAnimation) {
+        let time = Date.now() / 300;
+        ctx.beginPath();
+
+        for (let x = 0; x < canvas.width; x++) {
+            let y = canvas.height / 2 + Math.sin(x * 0.02 + time) * 20;
+            ctx.lineTo(x, y);
+        }
+
+        let gradient = ctx.createLinearGradient(0,0,canvas.width,0);
+        gradient.addColorStop(0,"#FF5252");
+        gradient.addColorStop(0.5,"#FF8A80");
+        gradient.addColorStop(1,"#FF5252");
+
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        return;
     }
+
+    // Listening Animation (microphone input)
+    analyser.getByteTimeDomainData(dataArray);
+    ctx.beginPath();
+
+    let sliceWidth = canvas.width / bufferLength;
+    let x = 0;
+    for (let i = 0; i < bufferLength; i++) {
+        let v = dataArray[i] / 128.0;
+        let y = v * canvas.height / 2;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+        x += sliceWidth;
+    }
+
+    let gradient = ctx.createLinearGradient(0,0,canvas.width,0);
+    gradient.addColorStop(0,"#4CAF50");
+    gradient.addColorStop(0.5,"#8BC34A");
+    gradient.addColorStop(1,"#CDDC39");
+
+    ctx.strokeStyle = gradient;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+}
+
+    drawWaveform();
 });
