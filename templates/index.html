@@ -3,22 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voice Assistant - Pico</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <div class="chat-container">
-        <h1>Voice Assistant - Pico</h1>
-        <div id="chat-window">
-            <!-- Chat messages will appear here -->
-        </div>
-        <div class="controls">
-            <button id="mic-button"></button>
-            <button id="action-button">Start Listening</button>
-        </div>
-        <canvas id="waveformCanvas"></canvas>
-    </div>
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <title>Pico AI Assistant</title>
+
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+    <!-- Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- ================= HEADER ================= -->
+
+    <header id="header">
+
+        <div class="logo">
+
+            <div class="logo-icon">
+                🤖
+            </div>
+
+            <div>
+
+                <h2>Pico</h2>
+
+                <span>Your AI Assistant</span>
+
+            </div>
+
+        </div>
+
+    </header>
+
+
+
+    <!-- ============== WELCOME SCREEN ============== -->
+
+    <section id="welcome-screen">
+
+        <h1>Voice Assistant - Pico</h1>
+
+        <p>
+            Ask anything using your voice or keyboard.
+        </p>
+
+    </section>
+
+
+
+    <!-- ============== CHAT AREA ============== -->
+
+    <main id="chat-section">
+
+        <div id="chat-window">
+
+            <!-- Messages will appear here -->
+
+        </div>
+
+    </main>
+
+
+
+
+    <!-- ============== INPUT AREA ============== -->
+
+    <footer id="input-area">
+
+        <div class="input-box">
+
+            <input
+                    type="text"
+                    id="text-input"
+                    placeholder="Message Pico..."
+                    autocomplete="off">
+
+            <button id="send-button">
+
+                <i class="fa-solid fa-paper-plane"></i>
+
+            </button>
+
+        </div>
+
+
+
+        <div class="voice-controls">
+
+            <button id="action-button">
+
+                <i class="fa-solid fa-microphone"></i>
+
+                <span>Start Listening</span>
+
+            </button>
+
+        </div>
+
+
+
+        <div class="wave-container">
+
+            <canvas id="waveformCanvas"></canvas>
+
+        </div>
+
+    </footer>
+
+</div>
+
+
+
+<!-- JS -->
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+
 </body>
 </html>

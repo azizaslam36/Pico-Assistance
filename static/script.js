@@ -1,197 +1,416 @@
-let isListening = false;
-let voices = [];
-let isSpeaking = false;
-let speakingAnimation = false;
+console.log("Pico JS Loaded");
+alert("JS Loaded");
 
-
-const micButton = document.getElementById("mic-button");
-const actionButton = document.getElementById("action-button");
-const chatWindow = document.getElementById("chat-window");
-const canvas = document.getElementById("waveformCanvas");
-const ctx = canvas.getContext("2d");
-
-// Speech Recognition setup
-const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-recognition.continuous = false;
-recognition.interimResults = false;
-recognition.lang = "en-US";
-
-// Load voices
-function loadVoices() {
-    voices = window.speechSynthesis.getVoices();
-    if (voices.length === 0) setTimeout(loadVoices, 500);
-}
-window.speechSynthesis.onvoiceschanged = loadVoices;
-loadVoices();
-
-// Speak function
-function speak(text, callback = null) {
-    if (voices.length === 0) { setTimeout(() => speak(text, callback), 500); return; }
-
-    let speech = new SpeechSynthesisUtterance(text);
-    let femaleVoice = voices.find(v => v.name.toLowerCase().includes("female")) || voices[0];
-    speech.voice = femaleVoice;
-
-    isSpeaking = true;
-    speakingAnimation = true;  // Start speaking waveform animation
-
-    speech.onend = () => {
-        isSpeaking = false;
-        speakingAnimation = false; // Stop animation when done
-        if (callback) callback();
-    };
-
-    window.speechSynthesis.speak(speech);
-}
-
-
-// Chat message function
-function addMessage(text, sender, imageUrl = null) {
-    const message = document.createElement("div");
-    message.classList.add("message", sender);
-    const bubble = document.createElement("div");
-    bubble.classList.add("bubble");
-    bubble.innerText = text;
-    message.appendChild(bubble);
-    if (imageUrl) {
-        const img = document.createElement("img");
-        img.src = imageUrl;
-        message.appendChild(img);
-    }
-    chatWindow.appendChild(message);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
-}
-
-// Start listening
-function startListening() {
-    actionButton.disabled = true;
-    addMessage("Hi, Pico here. How can I help you?", "pico");
-    speak("Hi, Pico here. How can I help you?", () => {
-        recognition.start();
-        isListening = true;
-        actionButton.innerText = "Stop Listening";
-        actionButton.disabled = false;
-        micButton.classList.add("active");
-    });
-}
-
-// Action button click
-actionButton.addEventListener("click", () => {
-    window.speechSynthesis.resume();
-    if (isSpeaking) return;
-    if (isListening) {
-        recognition.stop();
-        isListening = false;
-        actionButton.innerText = "Start Listening";
-        micButton.classList.remove("active");
-    } else startListening();
-});
-
-// Mic button click
-micButton.addEventListener("click", () => {
-    if (micButton.classList.contains("active")) {
-        recognition.stop();
-        micButton.classList.remove("active");
-    } else {
-        recognition.start();
-        micButton.classList.add("active");
-    }
-});
-
-// Handle voice input
-recognition.onresult = (event) => {
-    const command = event.results[0][0].transcript;
-    addMessage(command, "user");
-    sendCommand(command);
+const CONFIG = {
+    assistantName: "Pico",
+    welcomeMessage: "Hello! I'm Pico. How can I help you today?",
+    recognitionLanguage: "en-IN",
+    typingDelay: 400,
+    maxImageWidth: 350,
+    maxImageHeight: 280,
+    waveHeight: 80
 };
 
-recognition.onend = () => { isListening = false; micButton.classList.remove("active"); };
+class PicoAssistant {
+    constructor() {
+        // DOM Elements
+        this.welcomeScreen = document.getElementById("welcome-screen");
+        this.chatSection = document.getElementById("chat-section");
+        this.chatWindow = document.getElementById("chat-window");
+        this.textInput = document.getElementById("text-input");
+        this.sendButton = document.getElementById("send-button");
+        this.actionButton = document.getElementById("action-button");
+        this.waveCanvas = document.getElementById("waveformCanvas");
+        this.ctx = this.waveCanvas.getContext("2d");
+        
+        // App State
+        this.chatStarted = false;
+        this.isListening = false;
+        this.isSpeaking = false;
+        this.speakingAnimation = false;
+        this.typingBubble = null;
+        this.voices = [];
+        this.recognition = null;
+        this.init();
+    }
 
-// Send command to Flask
-function sendCommand(command) {
-    fetch("/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: command })
-    })
-    .then(res => res.json())
-    .then(data => {
-        addMessage(data.response, "pico", data.image);
-        speak(data.response, () => {
-            recognition.start();
-            isListening = true;
-            actionButton.innerText = "Stop Listening";
-            micButton.classList.add("active");
+    // ----------------------------
+    // Initialization
+    // ----------------------------
+
+    init(){
+        
+        this.loadVoices();
+        this.initializeRecognition();
+        this.bindEvents();
+        this.initializeCanvas();
+    }
+
+    bindEvents(){
+        this.sendButton.addEventListener("click", () => {
+            this.handletextMessage();
         });
-    })
-    .catch(err => {
-        addMessage("Sorry, something went wrong.", "pico");
-        speak("Sorry, something went wrong.");
-        console.error(err);
-    });
-}
+        this.textInput.addEventListener("keydown", (e) => {
+            if(e.key === "Enter") {
+                this.handleTextMessage();
+            }
+        });
+        this.actionButton.addEventListener("click", () => {
+            this.toggleListening();
+        });
+    }
+    
+    startchat(){
+        if (this.chatStarted) return;
+        this.chatStarted = true;
+        this.welcomeScreen.style.display = "none";
+        this.chatSection.style.display = "block";
+    }
+    getCurrentTime(){
+        return new Date().toLocaleTimeString([], {
+            hour: '2-digit', 
+            minute: '2-digit' });
+        }
+        
+    scrollToBottom(){
+        this.chatWindow.scrollTop = this.chatWindow.scrollHeight;
+    }
 
-// Canvas waveform
-canvas.width = canvas.offsetWidth;
-canvas.height = canvas.offsetHeight;
+    
+    // ----------------------------
+    // Chat
+    // ----------------------------
 
-navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-    const audioCtx = new AudioContext();
-    const analyser = audioCtx.createAnalyser();
-    const source = audioCtx.createMediaStreamSource(stream);
-    source.connect(analyser);
-    analyser.fftSize = 256;
-    const bufferLength = analyser.frequencyBinCount;
-    const dataArray = new Uint8Array(bufferLength);
+    
+        /**    
+         * create a chat message.
+         * 
+         * @param {string} sender - The sender of the message, either "user" or "pico".
+         * @param {string} text - The text content of the message.
+         * @param {string|null} imageUrl - Optional URL of an image to include in the message.
+         */
+        
+    createMessage(sender, text, imageUrl = null) {
+            
+            const message = document.createElement("div");
+            message.className = `message ${sender}`;
+            const bubble = document.createElement("div");
+            bubble.className = "bubble";
+            
+            //Sender Name
+            const senderName = document.createElement("div");
+            senderName.className = "sender";
+            senderName.textContent = sender === "user" ? "You" : CONFIG.assistantName;
 
-    function drawWaveform() {
-    requestAnimationFrame(drawWaveform);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+            //Message Text
+            const messageText = document.createElement("div");
+            messageText.className = "message-text";
+            messageText.textContent = text;
 
-    // Speaking Animation (smooth glowing wave)
-    if (speakingAnimation) {
-        let time = Date.now() / 300;
-        ctx.beginPath();
+            bubble.appendChild(senderName);
+            bubble.appendChild(messageText);
 
-        for (let x = 0; x < canvas.width; x++) {
-            let y = canvas.height / 2 + Math.sin(x * 0.02 + time) * 20;
-            ctx.lineTo(x, y);
+            // Optional Image
+            if (imageUrl) {
+                const img = document.createElement("img");
+                img.src = imageUrl;
+                img.loading = "lazy";
+                img.alt = "Pico Image";
+                img.style.maxWidth = `${CONFIG.maxImageWidth}px`;
+                img.style.maxHeight = `${CONFIG.maxImageHeight}px`;
+                img.style.width = "100%";
+                img.style.objectFit = "contain";
+                img.style.marginTop = "12px";
+                img.style.borderRadius = "15px";
+                img.onerror = () => {
+                    img.remove();
+                };  
+                bubble.appendChild(img);
+            }
+
+            // timestamp
+            const time = document.createElement("div");
+            time.className = "timestamp";
+            time.textContent = this.getCurrentTime();
+            bubble.appendChild(time);
+            message.appendChild(bubble);
+            this.chatWindow.appendChild(message);
+            this.scrollToBottom();
         }
 
-        let gradient = ctx.createLinearGradient(0,0,canvas.width,0);
-        gradient.addColorStop(0,"#FF5252");
-        gradient.addColorStop(0.5,"#FF8A80");
-        gradient.addColorStop(1,"#FF5252");
-
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = 4;
-        ctx.stroke();
-        return;
+    handleTextMessage(){
+        const text = this.textInput.value.trim();
+        if (!text) return;
+        this.startchat();
+        this.createMessage("user", text);
+        this.textInput.value = "";
+        this.sendCommand(text);
     }
 
-    // Listening Animation (microphone input)
-    analyser.getByteTimeDomainData(dataArray);
-    ctx.beginPath();
+    showTyping(){
+        if (this.typingBubble) return;
+        const typing = document.createElement("div");
+        typing.className = "message pico typing";
 
-    let sliceWidth = canvas.width / bufferLength;
-    let x = 0;
-    for (let i = 0; i < bufferLength; i++) {
-        let v = dataArray[i] / 128.0;
-        let y = v * canvas.height / 2;
-        if (i === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-        x += sliceWidth;
+        typing.innerHTML = `
+            <div class="bubble">
+                <div class="sender">${CONFIG.assistantName}</div>
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                </div> 
+        `;
+        this.typingBubble = typing;
+        this.chatWindow.appendChild(typing);
+        this.scrollToBottom();
     }
 
-    let gradient = ctx.createLinearGradient(0,0,canvas.width,0);
-    gradient.addColorStop(0,"#4CAF50");
-    gradient.addColorStop(0.5,"#8BC34A");
-    gradient.addColorStop(1,"#CDDC39");
+    removeTyping() {
+    if (!this.typingBubble) return;
+    this.typingBubble.remove();
+    this.typingBubble = null;}
 
-    ctx.strokeStyle = gradient;
-    ctx.lineWidth = 3;
-    ctx.stroke();
+    scrollToBottom(){
+        this.chatWindow.scrollTop = this.chatWindow.scrollHeight;
+    }
+
+
+    // ----------------------------
+    // Voice
+    // ----------------------------
+
+    /**
+ * Initialize Speech Recognition
+ */
+    initializeRecognition(){
+        const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert("Speech Recognition is not supported in this browser.");
+            return;
+        }
+        this.recognition = new SpeechRecognition();
+        this.recognition.lang = CONFIG.recognitionLanguage;
+        this.recognition.interimResults = false;
+        this.recognition.continuous = false;
+        this.recognition.maxAlternatives = 1;
+        this.registerRecognitionEvents();
+    }
+    /**
+     * Register recognition events
+     * */
+    registerRecognitionEvents(){
+        this.recognition.onstart = () => {
+            this.isListening = true;
+            this.actionButton.classList.add("listening");
+            this.actionButton.innerHTML = 
+            `<i class="fas fa-microphone-slash"></i>
+            <span>Listening...</span>
+            `;
+        };
+
+        this.recognition.onend = () => {
+            this.isListening = false;
+            this.actionButton.classList.remove("listening");
+            this.actionButton.innerHTML = 
+            `<i class="fas fa-microphone"></i>
+            <span>Start Listening</span>
+            `;
+        };
+        this.recognition.onerror = (event) => {
+            console.error(event.error);
+        };
+        this.recognition.onresult = (event) => {
+            const text = event.results[0][0].transcript;
+            this.handleVoiceMessage(text);
+        };
+    }
+
+    startListening(){
+        if (!this.recognition) return;
+        if (this.isListening) return;
+        this.recognition.start();
+    }
+
+    stopListening(){
+        if (!this.recognition) return;
+        this.recognition.stop();
+    }
+    toggleListening(){
+        if (this.isListening) {
+            this.stopListening();
+        } else {
+            this.startListening();
+        }
+    }
+
+    handleVoiceMessage(text){
+        if (!text) return;
+        this.startchat();
+        this.createMessage("user", text);
+        this.sendCommand(text);
+    }
+    loadVoices(){
+        this.voices = window.speechSynthesis.getVoices();
+        if (this.voices.length === 0) {
+            setTimeout(() => {
+                this.loadVoices();
+            }, 300);
+        }
+    }
+
+    speak(text,callback = null){
+        if (!text) return;
+        window.speechSynthesis.cancel();
+
+        const speech = new SpeechSynthesisUtterance(text);
+        speech.rate = 1;
+        speech.pitch = 1;
+        speech.volume = 1;
+        speech.lang = "en-IN";
+
+        const female =
+    this.voices.find(v => 
+        v.name.toLowerCase().includes("female")
+    );
+    if (female) 
+        speech.voice = female;
+    this.isSpeaking = true;
+    this.speakingAnimation = true;
+    speech.onend = () => {
+        this.isSpeaking = false;
+        this.speakingAnimation = false;
+        if (callback) callback();
+    };
+    window.speechSynthesis.speak(speech);
+    }
+
+    // ----------------------------
+    // Backend
+    // ----------------------------
+    
+    async sendCommand(command){
+        this.showTyping();
+        try {
+            const response = await fetch("/command", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ query:command })
+            });
+            if (!response.ok) {
+                throw new Error("server error");
+            }
+            const data = await response.json();
+            this.removeTyping();
+            this.createMessage(
+                "pico", 
+                data.response,
+                data.image|| null
+            );
+            this.speak(data.response);
+        }
+        catch (error) {
+            console.error(error);
+            this.removeTyping();
+            this.createMessage(
+                "pico", 
+                "Sorry, something went wrong.",
+                null
+            );
+            this.speak("Sorry, something went wrong.");
+        }
+    }
+    // ----------------------------
+    // wave
+    // ----------------------------
+
+    initializeCanvas(){
+        this.resizeCanvas();
+        window.addEventListener("resize", () => {
+            this.resizeCanvas();
+        });
+        this.initializeMicrophone();
+    }
+
+    resizeCanvas(){
+        this.waveCanvas.width = 
+        this.waveCanvas.offsetWidth;
+        this.waveCanvas.height =
+        this.waveCanvas.offsetHeight;
+    }
+    async initializeMicrophone(){
+        try {
+            const stream =
+    await navigator.mediaDevices.getUserMedia({ 
+        audio: true 
+    });
+    this.audioContext = 
+    new AudioContext();
+    this.analyser =
+    this.audioContext.createAnalyser();
+    const source =
+    this.audioContext.createMediaStreamSource(stream);
+    source.connect(this.analyser);
+    this.analyser.fftSize = 256;
+    this.bufferLength = this.analyser.frequencyBinCount;
+    this.dataArray = new Uint8Array(this.bufferLength);
+    this.drawWave();
+    }
+    catch (error) {
+        console.error(error);
+    }
+    }
+
+    drawWave(){
+        requestAnimationFrame(() => this.drawWave());
+        this.ctx.clearRect(0, 0, this.waveCanvas.width, this.waveCanvas.height);
+        if (this.speakingAnimation) {
+            this.drawSpeakingWave();
+        }
+        else {
+            this.drawListeningWave();
+        }
+    }
+
+    drawSpeakingWave(){
+        const time = Date.now() / 300;
+        this.ctx.beginPath();
+        for (let x = 0; x < this.waveCanvas.width; x++) {
+            const y = this.waveCanvas.height / 2 + Math.sin(x * 0.02 + time) * 20;
+            if (x === 0) this.ctx.moveTo(x, y);
+            else this.ctx.lineTo(x, y);
+        }
+        const gradient = this.ctx.createLinearGradient(0, 0, this.waveCanvas.width, 0);
+        gradient.addColorStop(0, "#10A37F");
+        gradient.addColorStop(0.5, "#19C37D");
+        gradient.addColorStop(1, "#10A37F");
+        this.ctx.strokeStyle = gradient;
+        this.ctx.lineWidth = 4;
+        this.ctx.stroke();
+    }
+    drawListeningWave(){
+        this.analyser.getByteTimeDomainData(this.dataArray);
+        this.ctx.beginPath();
+        let sliceWidth = this.waveCanvas.width / this.bufferLength;
+        let x = 0;
+        for (let i = 0; i < this.bufferLength; i++) {
+            let v = this.dataArray[i] / 128.0;
+            let y = v * this.waveCanvas.height / 2;
+            if (i === 0) this.ctx.moveTo(x, y);
+            else this.ctx.lineTo(x, y);
+            x += sliceWidth;
+        }
+        this.ctx.strokeStyle = "#10A37F";
+        this.ctx.lineWidth = 3;
+        this.ctx.stroke();
+    }
 }
 
-    drawWaveform();
+
+document.addEventListener("DOMContentLoaded", () => {
+    new PicoAssistant();
 });

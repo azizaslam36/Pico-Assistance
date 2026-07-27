@@ -1,0 +1,576 @@
+/* ===========================
+   Pico AI Assistant
+   Developed by Mohd Aziz Aslam
+=========================== */
+
+:root{
+
+    --bg:#0f172a;
+    --surface:#111827;
+    --surface2:#1e293b;
+
+    --primary:#3b82f6;
+    --primaryHover:#2563eb;
+
+    --user:#2563eb;
+    --assistant:#1f2937;
+
+    --text:#f8fafc;
+    --text2:#cbd5e1;
+
+    --border:#334155;
+
+    --radius:18px;
+
+    --shadow:0 15px 40px rgba(0,0,0,.30);
+
+}
+
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html{
+    scroll-behavior:smooth;
+}
+
+body{
+
+    font-family:'Inter',sans-serif;
+
+    background:var(--bg);
+
+    color:var(--text);
+
+    width:100%;
+    height:100vh;
+
+    overflow:hidden;
+
+}
+
+
+/* ========================= */
+
+.app{
+
+    width:100%;
+
+    height:100vh;
+
+    display:flex;
+
+    flex-direction:column;
+
+}
+
+/* ========================= */
+
+header{
+
+    height:72px;
+
+    border-bottom:1px solid var(--border);
+
+    display:flex;
+
+    align-items:center;
+
+    justify-content:center;
+
+    padding:0 30px;
+
+    background:rgba(15,23,42,.92);
+
+    backdrop-filter:blur(15px);
+
+    z-index:100;
+
+}
+
+/* ========================= */
+
+.logo{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:14px;
+
+}
+
+.logo-icon{
+
+    width:52px;
+
+    height:52px;
+
+    border-radius:50%;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    font-size:24px;
+
+    background:linear-gradient(135deg,#3b82f6,#06b6d4);
+
+}
+
+.logo h2{
+
+    font-size:22px;
+
+    font-weight:700;
+
+}
+
+.logo span{
+
+    color:var(--text2);
+
+    font-size:14px;
+
+}
+
+
+/* ===========================
+WELCOME SCREEN
+=========================== */
+
+#welcome-screen{
+
+    flex:1;
+
+    display:flex;
+
+    justify-content:center;
+
+    align-items:center;
+
+    flex-direction:column;
+
+    text-align:center;
+
+    transition:.4s;
+
+    padding:30px;
+
+}
+
+#welcome-screen h1{
+
+    font-size:58px;
+
+    font-weight:700;
+
+    margin-bottom:20px;
+
+}
+
+#welcome-screen p{
+
+    color:var(--text2);
+
+    font-size:22px;
+
+}
+
+
+/* ===========================
+CHAT AREA
+=========================== */
+
+#chat-section{
+
+    flex:1;
+
+    display:none;
+
+    overflow:hidden;
+
+}
+
+#chat-window{
+
+    width:100%;
+
+    height:100%;
+
+    overflow-y:auto;
+
+    padding:35px;
+
+}
+
+
+/* scrollbar */
+
+#chat-window::-webkit-scrollbar{
+
+    width:8px;
+
+}
+
+#chat-window::-webkit-scrollbar-thumb{
+
+    background:#3b82f6;
+
+    border-radius:20px;
+
+}
+
+
+/* ===========================
+MESSAGES
+=========================== */
+
+.message{
+
+    display:flex;
+
+    width:100%;
+
+    margin-bottom:22px;
+
+}
+
+.message.user{
+
+    justify-content:flex-end;
+
+}
+
+.message.pico{
+
+    justify-content:flex-start;
+
+}
+
+.bubble{
+
+    max-width:72%;
+
+    padding:16px 22px;
+
+    border-radius:20px;
+
+    line-height:1.8;
+
+    font-size:16px;
+
+    word-break:break-word;
+
+    box-shadow:var(--shadow);
+
+    animation:fadeUp .35s;
+
+}
+
+.message.user .bubble{
+
+    background:var(--user);
+
+    border-bottom-right-radius:6px;
+
+}
+
+.message.pico .bubble{
+
+    background:var(--assistant);
+
+    border-bottom-left-radius:6px;
+
+}
+
+
+/* images */
+
+.message img{
+
+    width:240px;
+
+    border-radius:16px;
+
+    margin-top:12px;
+
+}
+
+
+/* ===========================
+INPUT AREA
+=========================== */
+
+#input-area{
+
+    width:100%;
+
+    border-top:1px solid var(--border);
+
+    padding:20px;
+
+    background:#111827;
+
+}
+
+/* ========================= */
+
+.input-box{
+
+    width:100%;
+
+    max-width:1100px;
+
+    margin:auto;
+
+    display:flex;
+
+    gap:15px;
+
+}
+
+#text-input{
+
+    flex:1;
+
+    height:58px;
+
+    border:none;
+
+    outline:none;
+
+    border-radius:50px;
+
+    background:#1f2937;
+
+    color:white;
+
+    padding:0 25px;
+
+    font-size:16px;
+
+}
+
+#text-input::placeholder{
+
+    color:#94a3b8;
+
+}
+
+#send-button{
+
+    width:58px;
+
+    border:none;
+
+    border-radius:50%;
+
+    cursor:pointer;
+
+    color:white;
+
+    background:var(--primary);
+
+    transition:.3s;
+
+}
+
+#send-button:hover{
+
+    background:var(--primaryHover);
+
+}
+
+
+/* ===========================
+VOICE
+=========================== */
+
+.voice-controls{
+
+    display:flex;
+
+    justify-content:center;
+
+    margin-top:18px;
+
+}
+
+#action-button{
+
+    height:52px;
+
+    border:none;
+
+    border-radius:50px;
+
+    padding:0 35px;
+
+    background:var(--primary);
+
+    color:white;
+
+    font-size:16px;
+
+    cursor:pointer;
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    transition:.3s;
+
+}
+
+#action-button:hover{
+
+    background:var(--primaryHover);
+
+}
+
+#action-button.listening{
+
+    background:#ef4444;
+
+}
+
+
+/* ===========================
+WAVE
+=========================== */
+
+.wave-container{
+
+    width:100%;
+
+    max-width:900px;
+
+    margin:18px auto 0;
+
+}
+
+#waveformCanvas{
+
+    width:100%;
+
+    height:80px;
+
+    border-radius:15px;
+
+    background:#1e293b;
+
+}
+
+
+/* ===========================
+ANIMATION
+=========================== */
+
+@keyframes fadeUp{
+
+    from{
+
+        opacity:0;
+
+        transform:translateY(20px);
+
+    }
+
+    to{
+
+        opacity:1;
+
+        transform:translateY(0);
+
+    }
+
+}
+
+
+/* ===========================
+RESPONSIVE
+=========================== */
+
+@media(max-width:900px){
+
+#welcome-screen h1{
+
+font-size:42px;
+
+}
+
+#welcome-screen p{
+
+font-size:18px;
+
+}
+
+.bubble{
+
+max-width:88%;
+
+}
+
+header{
+
+padding:0 15px;
+
+}
+
+}
+
+@media(max-width:600px){
+
+#chat-window{
+
+padding:18px;
+
+}
+
+.logo h2{
+
+font-size:18px;
+
+}
+
+.logo span{
+
+font-size:12px;
+
+}
+
+#welcome-screen h1{
+
+font-size:34px;
+
+}
+
+#welcome-screen p{
+
+font-size:16px;
+
+}
+
+#action-button{
+
+width:100%;
+
+justify-content:center;
+
+}
+
+.input-box{
+
+gap:10px;
+
+}
+
+}
