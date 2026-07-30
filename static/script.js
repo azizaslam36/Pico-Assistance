@@ -1,6 +1,3 @@
-console.log("Pico JS Loaded");
-alert("JS Loaded");
-
 const CONFIG = {
     assistantName: "Pico",
     welcomeMessage: "Hello! I'm Pico. How can I help you today?",
@@ -8,7 +5,6 @@ const CONFIG = {
     typingDelay: 400,
     maxImageWidth: 350,
     maxImageHeight: 280,
-    waveHeight: 80
 };
 
 class PicoAssistant {
@@ -19,9 +15,7 @@ class PicoAssistant {
         this.chatWindow = document.getElementById("chat-window");
         this.textInput = document.getElementById("text-input");
         this.sendButton = document.getElementById("send-button");
-        this.actionButton = document.getElementById("action-button");
-        this.waveCanvas = document.getElementById("waveformCanvas");
-        this.ctx = this.waveCanvas.getContext("2d");
+        this.micButton = document.getElementById("mic-button");
         
         // App State
         this.chatStarted = false;
@@ -43,29 +37,42 @@ class PicoAssistant {
         this.loadVoices();
         this.initializeRecognition();
         this.bindEvents();
-        this.initializeCanvas();
+        this.textInput.focus();
     }
 
     bindEvents(){
         this.sendButton.addEventListener("click", () => {
-            this.handletextMessage();
+            this.handleTextMessage();
         });
         this.textInput.addEventListener("keydown", (e) => {
-            if(e.key === "Enter") {
+            if(e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
                 this.handleTextMessage();
             }
         });
-        this.actionButton.addEventListener("click", () => {
+        this.textInput.addEventListener("input", () => {
+            this.autoResizeTextarea();
+        });
+        this.micButton.addEventListener("click", () => {
             this.toggleListening();
         });
     }
     
-    startchat(){
-        if (this.chatStarted) return;
-        this.chatStarted = true;
-        this.welcomeScreen.style.display = "none";
-        this.chatSection.style.display = "block";
-    }
+    startChat(){
+
+    if(this.chatStarted) return;
+
+    this.chatStarted = true;
+
+    this.welcomeScreen.style.display="none";
+
+    document.querySelector(".app")
+        .classList.add("chat-active");
+
+    this.chatSection.style.display="block";
+
+    this.textInput.focus();
+}
     getCurrentTime(){
         return new Date().toLocaleTimeString([], {
             hour: '2-digit', 
@@ -74,6 +81,10 @@ class PicoAssistant {
         
     scrollToBottom(){
         this.chatWindow.scrollTop = this.chatWindow.scrollHeight;
+    }
+    autoResizeTextarea(){
+        this.textInput.style.height = "auto";
+        this.textInput.style.height = this.textInput.scrollHeight + "px";
     }
 
     
@@ -96,18 +107,12 @@ class PicoAssistant {
             message.className = `message ${sender}`;
             const bubble = document.createElement("div");
             bubble.className = "bubble";
-            
-            //Sender Name
-            const senderName = document.createElement("div");
-            senderName.className = "sender";
-            senderName.textContent = sender === "user" ? "You" : CONFIG.assistantName;
 
             //Message Text
             const messageText = document.createElement("div");
             messageText.className = "message-text";
             messageText.textContent = text;
 
-            bubble.appendChild(senderName);
             bubble.appendChild(messageText);
 
             // Optional Image
@@ -141,10 +146,11 @@ class PicoAssistant {
     handleTextMessage(){
         const text = this.textInput.value.trim();
         if (!text) return;
-        this.startchat();
+        this.startChat();
         this.createMessage("user", text);
         this.textInput.value = "";
         this.sendCommand(text);
+        this.textInput.focus();
     }
 
     showTyping(){
@@ -154,7 +160,6 @@ class PicoAssistant {
 
         typing.innerHTML = `
             <div class="bubble">
-                <div class="sender">${CONFIG.assistantName}</div>
                 <div class="typing-dots">
                     <span></span>
                     <span></span>
@@ -204,20 +209,16 @@ class PicoAssistant {
     registerRecognitionEvents(){
         this.recognition.onstart = () => {
             this.isListening = true;
-            this.actionButton.classList.add("listening");
-            this.actionButton.innerHTML = 
-            `<i class="fas fa-microphone-slash"></i>
-            <span>Listening...</span>
-            `;
+            this.micButton.classList.add("listening");
+            this.micButton.innerHTML = 
+            `<i class="fa-solid fa-circle-xmark"></i>`;
         };
 
         this.recognition.onend = () => {
             this.isListening = false;
-            this.actionButton.classList.remove("listening");
-            this.actionButton.innerHTML = 
-            `<i class="fas fa-microphone"></i>
-            <span>Start Listening</span>
-            `;
+            this.micButton.classList.remove("listening");
+            this.micButton.innerHTML = 
+            '<i class="fa-solid fa-microphone"></i>';
         };
         this.recognition.onerror = (event) => {
             console.error(event.error);
@@ -248,9 +249,10 @@ class PicoAssistant {
 
     handleVoiceMessage(text){
         if (!text) return;
-        this.startchat();
+        this.startChat();
         this.createMessage("user", text);
         this.sendCommand(text);
+        this.textInput.focus();
     }
     loadVoices(){
         this.voices = window.speechSynthesis.getVoices();
@@ -312,6 +314,7 @@ class PicoAssistant {
                 data.image|| null
             );
             this.speak(data.response);
+            this.textInput.focus();
         }
         catch (error) {
             console.error(error);
@@ -323,90 +326,6 @@ class PicoAssistant {
             );
             this.speak("Sorry, something went wrong.");
         }
-    }
-    // ----------------------------
-    // wave
-    // ----------------------------
-
-    initializeCanvas(){
-        this.resizeCanvas();
-        window.addEventListener("resize", () => {
-            this.resizeCanvas();
-        });
-        this.initializeMicrophone();
-    }
-
-    resizeCanvas(){
-        this.waveCanvas.width = 
-        this.waveCanvas.offsetWidth;
-        this.waveCanvas.height =
-        this.waveCanvas.offsetHeight;
-    }
-    async initializeMicrophone(){
-        try {
-            const stream =
-    await navigator.mediaDevices.getUserMedia({ 
-        audio: true 
-    });
-    this.audioContext = 
-    new AudioContext();
-    this.analyser =
-    this.audioContext.createAnalyser();
-    const source =
-    this.audioContext.createMediaStreamSource(stream);
-    source.connect(this.analyser);
-    this.analyser.fftSize = 256;
-    this.bufferLength = this.analyser.frequencyBinCount;
-    this.dataArray = new Uint8Array(this.bufferLength);
-    this.drawWave();
-    }
-    catch (error) {
-        console.error(error);
-    }
-    }
-
-    drawWave(){
-        requestAnimationFrame(() => this.drawWave());
-        this.ctx.clearRect(0, 0, this.waveCanvas.width, this.waveCanvas.height);
-        if (this.speakingAnimation) {
-            this.drawSpeakingWave();
-        }
-        else {
-            this.drawListeningWave();
-        }
-    }
-
-    drawSpeakingWave(){
-        const time = Date.now() / 300;
-        this.ctx.beginPath();
-        for (let x = 0; x < this.waveCanvas.width; x++) {
-            const y = this.waveCanvas.height / 2 + Math.sin(x * 0.02 + time) * 20;
-            if (x === 0) this.ctx.moveTo(x, y);
-            else this.ctx.lineTo(x, y);
-        }
-        const gradient = this.ctx.createLinearGradient(0, 0, this.waveCanvas.width, 0);
-        gradient.addColorStop(0, "#10A37F");
-        gradient.addColorStop(0.5, "#19C37D");
-        gradient.addColorStop(1, "#10A37F");
-        this.ctx.strokeStyle = gradient;
-        this.ctx.lineWidth = 4;
-        this.ctx.stroke();
-    }
-    drawListeningWave(){
-        this.analyser.getByteTimeDomainData(this.dataArray);
-        this.ctx.beginPath();
-        let sliceWidth = this.waveCanvas.width / this.bufferLength;
-        let x = 0;
-        for (let i = 0; i < this.bufferLength; i++) {
-            let v = this.dataArray[i] / 128.0;
-            let y = v * this.waveCanvas.height / 2;
-            if (i === 0) this.ctx.moveTo(x, y);
-            else this.ctx.lineTo(x, y);
-            x += sliceWidth;
-        }
-        this.ctx.strokeStyle = "#10A37F";
-        this.ctx.lineWidth = 3;
-        this.ctx.stroke();
     }
 }
 
